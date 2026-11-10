@@ -1,0 +1,39 @@
+# ollama-ctxguard 설정 예시 / example config
+# 복사해서 쓰세요: cp example/ctxguard.yaml ./ctxguard.yaml
+# (serve·doctor 는 --config 를 주지 않으면 현재 폴더의 ctxguard.yaml 을 읽습니다)
+
+# Ollama 주소
+upstream: http://127.0.0.1:11434
+
+# 프록시가 들을 주소. 기본은 내 컴퓨터(127.0.0.1)에서만 접속 가능.
+# 0.0.0.0 등으로 열면 같은 네트워크의 누구나 로컬 모델을 쓸 수 있습니다(인증 없음).
+listen: 127.0.0.1:11435
+
+# 모델 이름(또는 글롭 * ?) → num_ctx.
+# 정확한 이름이 글롭보다, 더 구체적인 글롭이 덜 구체적인 글롭보다 우선합니다.
+# 태그 없는 이름("llama3.2")은 ":latest" 로 봅니다.
+# 같은 모델에 값을 하나만 두세요 — 값이 바뀌면 Ollama 가 모델을 다시 올립니다.
+models:
+  "qwen3:*": 32768
+  "llama3.2:3b": 16384
+
+# 목록에 없는 모델에 줄 값. 지우거나 비워 두면 손대지 않습니다(서버 기본값).
+# default: 8192
+
+# true 면 "truncated" 판정을 오류로 바꿉니다(비스트리밍 422, 스트리밍 error 청크).
+# suspect·near_limit·unknown 은 막지 않습니다.
+strict: false
+
+# 잘림 판정 조정값(보통은 그대로 두세요).
+truncation:
+  keep_slack: 8         # 서명 구간 폭: num_ctx/2 ~ num_ctx/2 + keep_slack
+  bytes_per_token: 6    # 입력 토큰 추정: UTF-8 바이트 / 이 값 (보수적으로 크게)
+  ratio: 1.2            # 추정 입력이 평가 토큰의 이 배수 이상이면 "넘쳤다"
+  reserve: 512          # max_tokens 가 없을 때 생성용으로 남길 토큰
+
+# 업스트림 응답 헤더를 기다리는 최대 시간(첫 모델 로드는 수십 초 걸릴 수 있음)
+upstream_timeout_seconds: 600
+
+# 접근 로그: json | text. log_file 을 주면 stderr 대신 파일에 덧붙입니다(10MB 넘으면 .1 로 교체).
+log_format: json
+# log_file: ctxguard.log
