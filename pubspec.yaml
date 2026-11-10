@@ -1,0 +1,28 @@
+name: ollama_ctxguard
+description: >-
+  Local proxy in front of Ollama that applies a per-model num_ctx to
+  OpenAI-compatible /v1/chat/completions requests and flags responses whose
+  prompt was silently truncated by the context window.
+version: 0.1.0
+repository: https://github.com/LeeGyeongPil/ollama-ctxguard
+issue_tracker: https://github.com/LeeGyeongPil/ollama-ctxguard/issues
+topics:
+  - ollama
+  - llm
+  - proxy
+  - cli
+# pub.dev 게시는 사용자 확인 뒤에 한다(M3). 실수로 게시되지 않도록 막아 둔다.
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+executables:
+  ollama-ctxguard: ollama_ctxguard
+
+dependencies:
+  args: 2.7.0
+  yaml: 3.1.4
+
+dev_dependencies:
+  test: 1.25.15
