@@ -1,5 +1,7 @@
 # ollama-ctxguard
 
+**한국어** | [English](README.en.md)
+
 > **English summary** — A small local proxy that sits in front of Ollama. It makes the per-model context size (`num_ctx`) you configure actually apply to OpenAI-compatible `/v1/chat/completions` requests (which ignore it), and it flags responses whose prompt was silently cut by the context window. Built for people who point OpenAI SDK based agents, coding CLIs or RAG apps at a local Ollama. Install: `dart pub get && mkdir -p build && dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard`, then change your client's `base_url` to `http://127.0.0.1:11435/v1`.
 
 Ollama 의 OpenAI 호환 주소(`/v1`)는 `num_ctx`(컨텍스트 창 크기)를 어디에 적어 보내도 무시하고, 프롬프트가 창보다 길면 앞부분을 **아무 표시 없이** 버립니다. `ollama-ctxguard` 는 앱과 Ollama 사이에 끼는 작은 프록시입니다. 앱 코드는 그대로 두고 `base_url` 만 바꾸면 모델별 `num_ctx` 가 실제로 적용되고, 잘림이 의심되면 응답마다 표시됩니다.
