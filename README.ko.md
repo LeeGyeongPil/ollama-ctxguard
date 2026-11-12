@@ -4,7 +4,7 @@
 
 Ollama 의 OpenAI 호환 주소(`/v1`)는 `num_ctx`(컨텍스트 창 크기)를 어디에 적어 보내도 무시하고, 프롬프트가 창보다 길면 앞부분을 **아무 표시 없이** 버립니다. `ollama-ctxguard` 는 앱과 Ollama 사이에 끼는 작은 프록시입니다. 앱 코드는 그대로 두고 `base_url` 만 바꾸면 모델별 `num_ctx` 가 실제로 적용되고, 잘림이 의심되면 응답마다 표시됩니다.
 
-![데모 실행 화면: /v1 직접 호출은 비밀 코드를 잃고, ctxguard 를 거치면 답한다](docs/images/01-hero.png)
+![데모 실행 화면: /v1 직접 호출은 비밀 코드를 잃고, ctxguard 를 거치면 답한다](docs/images/01-hero.ko.png)
 *연습용 목(mock) 모드의 `demo` 출력. 같은 요청을 /v1 로 직접 보내면 4096 으로 올라가 앞부분이 잘리고, ctxguard 를 거치면 16384 로 올라가 답이 맞습니다.*
 
 ## 이런 분께
@@ -34,25 +34,27 @@ dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard
 가짜 Ollama 를 프로세스 안에 띄워 문제와 해결을 한 번에 보여 주는 `demo` 입니다. **연습용 목(mock) 모드**라서 실제 모델은 쓰지 않고 네트워크도 필요 없습니다.
 
 ```bash
-./build/ollama-ctxguard demo
+./build/ollama-ctxguard --lang ko demo
 ```
+
+`LANG` 이 `ko_*` 이면 `--lang` 없이도 한국어로 나옵니다. 아래 화면과 같게 보려면 `--lang ko` 로 고정하세요.
 
 ```text
-ollama-ctxguard demo — practice mock: a fake Ollama runs in this process, no real model is used
-prompt: 35495 bytes, "SECRET-CODE is 7731" at the very start; config: "qwen3:*": 16384
+ollama-ctxguard 데모 — 연습용 목 모드: 가짜 Ollama 가 이 프로세스 안에서 돌며 실제 모델은 쓰지 않습니다
+프롬프트: 35495 바이트, 맨 앞에 "SECRET-CODE is 7731"; 설정: "qwen3:*": 16384
 
-direct /v1    : num_ctx=4096 prompt_tokens=2050 verdict=truncated  answer: I don't see a secret code
-via ctxguard  : num_ctx=16384 prompt_tokens=5520 verdict=ok  answer: 7731
+직접 /v1      : num_ctx=4096 prompt_tokens=2050 verdict=truncated  답변: I don't see a secret code
+ctxguard 경유  : num_ctx=16384 prompt_tokens=5520 verdict=ok  답변: 7731
 
-what happened: /v1 ignored num_ctx, loaded the model at 4096 and silently kept only
-2050 prompt tokens (about half of 4096), so the code at the start was lost.
-ctxguard sent the same request to /api/chat with options.num_ctx=16384.
+무슨 일이 있었나: /v1 은 num_ctx 를 무시하고 모델을 4096 으로 로드했으며, 조용히
+프롬프트 토큰 2050 개만 남겼습니다 (4096 의 절반 정도). 그래서 맨 앞의 코드가 사라졌습니다.
+ctxguard 는 같은 요청을 options.num_ctx=16384 로 /api/chat 에 보냈습니다.
 
-proxy log line (no prompt text is logged):
-  {"ts":"2026-11-10T20:09:31.722969Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":false,"status":200,"num_ctx":16384,"num_ctx_source":"config","prompt_tokens":5520,"est_prompt_tokens":5915,"verdict":"ok","ms":1}
+프록시 로그 한 줄 (프롬프트 본문은 기록하지 않습니다):
+  {"ts":"2026-11-12T15:21:29.267897Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":false,"status":200,"num_ctx":16384,"num_ctx_source":"config","prompt_tokens":5520,"est_prompt_tokens":5915,"verdict":"ok","ms":2}
 ```
 
-(맨 아래 로그 줄의 `ts` 시각은 실행할 때마다 다릅니다.)
+(맨 아래 로그 줄의 `ts` 시각은 실행할 때마다 다릅니다. 이 로그 줄과 답변 문장은 번역되지 않고 영어 그대로 나옵니다. 화면 언어는 [화면 언어](#화면-언어-영어--한국어) 절을 보세요.)
 
 읽는 법: 앞부분에 "SECRET-CODE is 7731" 을 넣은 긴 프롬프트를 두 방법으로 보냈습니다. `/v1` 로 직접 보내면 모델이 4096 창으로 올라가 프롬프트를 절반쯤(2050 토큰)만 남겼고 답은 코드를 모릅니다. ctxguard 를 거치면 같은 요청이 네이티브 `/api/chat` 에 `options.num_ctx=16384` 로 전달되어 코드를 읽습니다. 목은 실제 Ollama 가 보인 동작(4096 에서 prompt_tokens 2050)을 규칙으로 재현한 것이고, 실제 모드는 모델 로드 때문에 첫 요청이 수십 초 걸릴 수 있습니다.
 
@@ -87,6 +89,21 @@ const client = new OpenAI({ baseURL: "http://127.0.0.1:11435/v1", apiKey: "ollam
 | `mock-upstream` | 연습용 가짜 Ollama 서버를 띄웁니다 | `ollama-ctxguard mock-upstream --port 11700` |
 
 `serve` 옵션: `--config`(기본 `./ctxguard.yaml`), `--upstream`, `--listen`, `--strict`, `--log-format json|text`, `--log-file`. 종료 코드는 0 정상, 2 설정 오류·업스트림 연결 실패, 64 인자 오류입니다.
+
+### 화면 언어 (영어 / 한국어)
+
+도움말, `serve` 시작·경고 줄, `doctor` 표와 경고, `demo` 설명, `mock-upstream` 안내, 오류 메시지를 영어 또는 한국어로 볼 수 있습니다. 언어는 아래 순서로 정하며, 한국어가 아니면 영어입니다.
+
+1. `--lang en|ko` (명령 앞뒤 어디든)
+2. 환경변수 `OLLAMA_CTXGUARD_LANG`
+3. `LC_ALL`, 그다음 `LC_MESSAGES`, 그다음 `LANG` (`ko_KR.UTF-8` 처럼 `ko` 로 시작하면 한국어)
+
+```bash
+ollama-ctxguard --lang ko doctor
+OLLAMA_CTXGUARD_LANG=ko ollama-ctxguard demo
+```
+
+스크립트가 깨지지 않도록 아래는 일부러 영어 그대로 둡니다: `doctor --json`(`warnings` 포함), 접근 로그, 프록시의 HTTP 응답 본문·헤더, `--version` 출력, 종료 코드, 데모의 프롬프트와 원시 로그 줄. 현지화된 문장 안에 들어가는 일부 원문도 그대로 둡니다: OS 가 준 오류 원문(예: `오류: 대기할 수 없습니다 (주소: …)` 뒤의 `Failed to create server socket (Can't assign requested address)`), YAML 파서 상세(예: `Expected node content.`), 번역 규칙에 없는 인자 오류의 원문(`인자 오류:` 접두 뒤에 영어), 데모의 데이터 라벨(`num_ctx=`, `prompt_tokens=`, `verdict=`)과 모델 답변 문장. 사람용 문구를 스크립트에서 비교한다면 `--lang en` 또는 `OLLAMA_CTXGUARD_LANG=en` 으로 고정하세요.
 
 ### 시나리오 1 — 응답에서 판정 보기 (비스트리밍)
 
@@ -142,8 +159,8 @@ data: [DONE]
 `--strict` 를 주면 `truncated` 판정을 오류로 바꿉니다(비스트리밍 422, 스트리밍은 `[DONE]` 직전 `error` 청크). 아래는 `"qwen3:*": 4096` 설정(`--strict`, 프록시는 다른 포트 `11736`)으로 `lorem ` 을 6000번 반복한 프롬프트를 보낸 실제 응답입니다. 따라 하려면 mock 업스트림(`11700`)을 띄운 채 다음을 실행하세요.
 
 ```bash
-printf '"qwen3:*": 4096\n' > strict.yaml
-ollama-ctxguard serve --config strict.yaml --upstream http://127.0.0.1:11700 --listen 127.0.0.1:11736 --strict
+printf 'models:\n  "qwen3:*": 4096\n' > strict.yaml
+ollama-ctxguard serve --config strict.yaml --upstream http://127.0.0.1:11700 --listen 127.0.0.1:11736 --strict --log-format text
 # 다른 터미널에서
 python3 -c 'import json; print(json.dumps({"model":"qwen3:4b","messages":[{"role":"user","content":"lorem "*6000}]}))' > big.json
 curl -si http://127.0.0.1:11736/v1/chat/completions -H 'content-type: application/json' -d @big.json
@@ -168,30 +185,30 @@ X-Ctxguard-Est-Prompt-Tokens: 6000
 ### 시나리오 4 — `doctor` 로 현재 상태 확인
 
 ```bash
-ollama-ctxguard doctor --upstream http://127.0.0.1:11700 --config example/ctxguard.yaml
+ollama-ctxguard --lang ko doctor --upstream http://127.0.0.1:11700 --config example/ctxguard.yaml
 ```
 
-![doctor 표: 설정 32768, 현재 로드 4096 경고](docs/images/02-doctor.png)
+![doctor 표: 설정 32768, 현재 로드 4096 경고](docs/images/02-doctor.ko.png)
 *`doctor` 출력. 목에 /v1 로 한 번 직접 요청해 4096 으로 올라간 뒤의 모습입니다.*
 
-텍스트로 옮기면 다음과 같습니다(목, 같은 상황).
+텍스트로 옮기면 다음과 같습니다(목, 같은 상황, `--lang ko`).
 
 ```text
-Ollama 0.0.0-practice-mock at http://127.0.0.1:11700
-MODEL        CONFIG  MODEL MAX  MODELFILE  LOADED      /v1 DIRECT
-qwen3:4b     32768   40960      -          4096        4096*
-llama3.2:3b  16384   40960      -          not loaded  server default
-* guessed from the current load: a /v1 client gets the server default
-  (OLLAMA_CONTEXT_LENGTH or a VRAM-based default) unless the Modelfile sets num_ctx
-warning: qwen3:4b: loaded at 4096 but config says 32768 — the next request through ctxguard reloads it
+Ollama 0.0.0-practice-mock 접속 주소: http://127.0.0.1:11700
+모델         설정   모델 최대  MODELFILE  로드됨      /v1 직접
+qwen3:4b     32768  40960      -          4096        4096*
+llama3.2:3b  16384  40960      -          로드 안 됨  서버 기본값
+* 현재 로드 크기로 추정한 값입니다: /v1 클라이언트는 서버 기본값을 받습니다
+  (OLLAMA_CONTEXT_LENGTH 또는 VRAM 기반 기본값). 단 Modelfile 에 num_ctx 가 있으면 그 값입니다
+경고: qwen3:4b: 로드된 크기와 설정이 다릅니다 (로드: 4096, 설정: 32768). ctxguard 를 거치는 다음 요청에서 다시 로드됩니다
 ```
 
-- `/v1 DIRECT` 열은 "ctxguard 없이 /v1 로 붙으면 받을 크기"입니다. Ollama 에 서버 기본값을 알려 주는 API 가 없어서 Modelfile 에 `num_ctx` 가 없으면 **현재 로드된 크기에서 추정**하고 `*` 를 붙입니다. 틀릴 수 있습니다.
-- 마지막 `warning` 은 "설정은 32768 인데 지금은 4096 으로 올라가 있어, 다음 요청 때 모델이 다시 올라간다"는 뜻입니다.
+- `/v1 직접` 열은 "ctxguard 없이 /v1 로 붙으면 받을 크기"입니다. Ollama 에 서버 기본값을 알려 주는 API 가 없어서 Modelfile 에 `num_ctx` 가 없으면 **현재 로드된 크기에서 추정**하고 `*` 를 붙입니다. 틀릴 수 있습니다.
+- 마지막 `경고` 줄은 "설정은 32768 인데 지금은 4096 으로 올라가 있어, 다음 요청 때 모델이 다시 올라간다"는 뜻입니다.
 - Ollama 에 연결할 수 없으면 오류와 종료 코드 2 로 끝납니다.
 
 ```text
-error: cannot reach Ollama at http://127.0.0.1:1 (is it running? set --upstream)
+오류: Ollama 에 연결할 수 없습니다 (주소: http://127.0.0.1:1). 실행 중인지 확인하고 --upstream 을 지정하세요
 ```
 
 ### 접근 로그 읽기
@@ -199,18 +216,18 @@ error: cannot reach Ollama at http://127.0.0.1:1 (is it running? set --upstream)
 `serve` 는 요청당 한 줄을 stderr 에 씁니다(`--log-file` 로 파일, `--log-format text` 로 사람이 읽기 쉬운 형식). 프롬프트·응답 본문과 `Authorization` 은 기록하지 않고, 정해 둔 필드만 남깁니다. 아래는 위 시나리오에서 얻은 실제 로그입니다.
 
 ```text
-ollama-ctxguard 0.1.0 listening on http://127.0.0.1:11735 -> upstream http://127.0.0.1:11700 (2 model rules, strict=false)
+ollama-ctxguard 0.2.0 시작 — 주소: http://127.0.0.1:11735, 업스트림: http://127.0.0.1:11700 (모델 규칙 2개, strict=false)
 {"ts":"2026-11-10T20:09:33.777875Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":false,"status":200,"num_ctx":32768,"num_ctx_source":"config","prompt_tokens":6,"est_prompt_tokens":1,"verdict":"ok","ms":1}
 {"ts":"2026-11-10T20:09:33.796980Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":true,"status":200,"num_ctx":32768,"num_ctx_source":"config","prompt_tokens":6,"est_prompt_tokens":1,"verdict":"ok","ms":1}
 {"ts":"2026-11-10T20:09:33.840871Z","method":"POST","path":"/v1/chat/completions","status":403,"ms":0,"event":"host_not_allowed"}
 {"ts":"2026-11-10T20:09:33.851702Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":false,"status":403,"est_prompt_tokens":0,"ms":0,"event":"origin_rejected"}
-shutting down
+종료합니다
 ```
 
 ```text
-ollama-ctxguard 0.1.0 listening on http://127.0.0.1:11736 -> upstream http://127.0.0.1:11700 (1 model rules, strict=true)
+ollama-ctxguard 0.2.0 시작 — 주소: http://127.0.0.1:11736, 업스트림: http://127.0.0.1:11700 (모델 규칙 1개, strict=true)
 2026-11-10T20:10:25.256384Z WARN method=POST path=/v1/chat/completions model=qwen3:4b stream=false status=422 num_ctx=4096 num_ctx_source=config prompt_tokens=2050 est_prompt_tokens=6000 verdict=truncated reason=context_shift_signature ms=4 event=ctx_warning
-shutting down
+종료합니다
 ```
 
 판정이 `ok` 가 아니면 `event=ctx_warning` 이 붙습니다. 그 밖의 `event` 는 `host_not_allowed`(허용되지 않은 Host, 403)와 `origin_rejected`(Ollama 가 브라우저 Origin 을 거부, 403)입니다. 두 경우 공격자가 보낸 Host·Origin 값은 로그에 쓰지 않습니다. 텍스트 형식에서 공백·`=`·따옴표가 든 값은 `model="x verdict=ok"` 처럼 따옴표로 감싸 가짜 필드가 생기지 않게 합니다.
@@ -289,16 +306,17 @@ flowchart LR
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| `cannot listen on 127.0.0.1:11434 … try --port` (목) | 실제 Ollama 가 이미 11434 를 사용 중 | `mock-upstream --port 11700` 처럼 다른 포트 |
-| `error: cannot reach Ollama at …` (종료 코드 2) | Ollama 가 꺼져 있거나 `--upstream` 주소가 틀림 | Ollama 실행 확인, `--upstream` 지정 |
-| `error: cannot listen on 127.0.0.1:11435: port already in use …` | 다른 ctxguard 가 아직 떠 있거나 포트가 사용 중 | `--listen 127.0.0.1:<다른 포트>` |
+| `오류: 대기할 수 없습니다 (주소: 127.0.0.1:11434): 포트가 이미 사용 중입니다 …` (목, `--lang en`: `cannot listen on 127.0.0.1:11434 … try --port`) | 실제 Ollama 가 이미 11434 를 사용 중 | `mock-upstream --port 11700` 처럼 다른 포트 |
+| `오류: Ollama 에 연결할 수 없습니다 …` (종료 코드 2, `--lang en`: `error: cannot reach Ollama at …`) | Ollama 가 꺼져 있거나 `--upstream` 주소가 틀림 | Ollama 실행 확인, `--upstream` 지정 |
+| `오류: 대기할 수 없습니다 (주소: 127.0.0.1:11435): 포트가 이미 사용 중입니다 …` (`--lang en`: `error: cannot listen on 127.0.0.1:11435: port already in use …`) | 다른 ctxguard 가 아직 떠 있거나 포트가 사용 중 | `--listen 127.0.0.1:<다른 포트>` |
+| `오류: 알 수 없는 하위 명령입니다: "frob"` 와 사용법 (종료 코드 64, `--lang en`: `error: Could not find a command named "frob".`) | 명령 이름 오타 | 사용법에서 `serve`·`doctor`·`demo`·`mock-upstream` 중 고름 |
 | 403 `host_not_allowed` | 요청의 Host 가 localhost·이 PC 이름·사설 IP 가 아님 | 주소를 `127.0.0.1`·`localhost` 로 바꿈 |
 | 403 `upstream returned HTTP 403 … Origin` | 브라우저 Origin 을 Ollama 가 거부 | Ollama 서버에 `OLLAMA_ORIGINS` 로 허용 |
 | `dart compile exe` 가 출력 폴더 오류를 냄 | `build` 폴더가 없음 | `mkdir -p build` 후 다시 컴파일 |
 | 판정이 계속 `unknown` | Ollama 응답에 `prompt_eval_count` 가 없거나 적용 크기를 모름 | 로그의 `reason` 확인, `doctor` 로 모델·로드 크기 확인 |
 | 모델을 바꿀 때마다 느려짐 | 같은 모델에 다른 `num_ctx` 가 들어와 Ollama 가 다시 올림 | 모델당 값 하나만 쓰고, 클라이언트가 보내는 네이티브 `num_ctx` 와 설정이 다르면 로그의 `num_ctx_request_override` 확인 |
 | 첫 요청이 수십 초 걸림 | 실제 모드의 모델 로드(큰 `num_ctx` 는 더 오래) | 정상입니다. 시간 제한은 `upstream_timeout_seconds` |
-| `doctor` 의 `/v1 DIRECT` 값이 이상함 | Modelfile 값이 없어 현재 로드 크기로 추정한 값 | `*` 표시 각주 참고, 추정임 |
+| `doctor` 의 `/v1 직접` 값이 이상함 | Modelfile 값이 없어 현재 로드 크기로 추정한 값 | `*` 표시 각주 참고, 추정임 |
 
 ## 개발·기여
 
@@ -309,7 +327,7 @@ dart analyze --fatal-infos
 dart test
 ```
 
-`dart test` 는 120개 시험이 모두 통과합니다(약 2초, 가짜 Ollama 로 127.0.0.1 안에서만 실행, 실제 Ollama·외부 네트워크 불필요). 실제 Ollama 로 동작을 확인하는 선택 도구는 `dart run tool/real_ollama_check.dart` 입니다.
+`dart test` 는 145개 시험이 모두 통과합니다(약 2초, 가짜 Ollama 로 127.0.0.1 안에서만 실행, 실제 Ollama·외부 네트워크 불필요). 실제 Ollama 로 동작을 확인하는 선택 도구는 `dart run tool/real_ollama_check.dart` 입니다.
 
 버그·제안은 이슈로 남겨 주세요. 변경 기록은 [CHANGELOG.md](CHANGELOG.md).
 

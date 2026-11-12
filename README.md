@@ -34,8 +34,10 @@ dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard
 `demo` starts a fake Ollama inside the process and shows the problem and the fix in one go. It is **practice mock mode**, so no real model is used and no network is needed.
 
 ```bash
-./build/ollama-ctxguard demo
+./build/ollama-ctxguard --lang en demo
 ```
+
+If `LANG` is `ko_*`, a command without `--lang` prints Korean, so `--lang en` pins the screen below.
 
 ```text
 ollama-ctxguard demo — practice mock: a fake Ollama runs in this process, no real model is used
@@ -87,6 +89,21 @@ Ollama behind a reverse proxy with a path prefix, like `--upstream http://host/o
 | `mock-upstream` | Starts a practice fake Ollama server | `ollama-ctxguard mock-upstream --port 11700` |
 
 `serve` options: `--config` (default `./ctxguard.yaml`), `--upstream`, `--listen`, `--strict`, `--log-format json|text`, `--log-file`. Exit codes are 0 normal, 2 configuration error or upstream connection failure, 64 argument error.
+
+### Screen language (English / Korean)
+
+Help, `serve` start and warning lines, the `doctor` table and warnings, the `demo` explanation, `mock-upstream` notes and error messages come in English or Korean. The language is chosen in this order, and anything that is not Korean is English:
+
+1. `--lang en|ko` (before or after the command)
+2. the `OLLAMA_CTXGUARD_LANG` environment variable
+3. `LC_ALL`, then `LC_MESSAGES`, then `LANG` (a value starting with `ko`, such as `ko_KR.UTF-8`, means Korean)
+
+```bash
+ollama-ctxguard --lang ko doctor
+OLLAMA_CTXGUARD_LANG=ko ollama-ctxguard demo
+```
+
+These stay in English on purpose so scripts keep working: `doctor --json` (including `warnings`), the access log, HTTP response bodies and headers from the proxy, the `--version` output, exit codes, and the demo's prompt and raw log lines. Some text inside a localized sentence is also left as it is: the original message of the OS (for example `Failed to create server socket (Can't assign requested address)` after `error: cannot listen on …`), the YAML parser detail (for example `Expected node content.`), the original text of a command-line argument error the translation rules do not cover (it follows the prefix `인자 오류:` in Korean), and the demo's data labels (`num_ctx=`, `prompt_tokens=`, `verdict=`) and the model's answer sentence. If you compare human-readable text in a script, pin it with `--lang en` or `OLLAMA_CTXGUARD_LANG=en`.
 
 ### Scenario 1 — See the verdict in the response (non-streaming)
 
@@ -142,8 +159,8 @@ data: [DONE]
 With `--strict`, a `truncated` verdict is turned into an error (422 for non-streaming; for streaming, an `error` chunk right before `[DONE]`). Below is the real response from sending a prompt that repeats `lorem ` 6000 times with the `"qwen3:*": 4096` setting (`--strict`, the proxy on a different port `11736`). To follow along, run the following with the mock upstream (`11700`) up.
 
 ```bash
-printf '"qwen3:*": 4096\n' > strict.yaml
-ollama-ctxguard serve --config strict.yaml --upstream http://127.0.0.1:11700 --listen 127.0.0.1:11736 --strict
+printf 'models:\n  "qwen3:*": 4096\n' > strict.yaml
+ollama-ctxguard serve --config strict.yaml --upstream http://127.0.0.1:11700 --listen 127.0.0.1:11736 --strict --log-format text
 # in another terminal
 python3 -c 'import json; print(json.dumps({"model":"qwen3:4b","messages":[{"role":"user","content":"lorem "*6000}]}))' > big.json
 curl -si http://127.0.0.1:11736/v1/chat/completions -H 'content-type: application/json' -d @big.json
@@ -168,7 +185,7 @@ X-Ctxguard-Est-Prompt-Tokens: 6000
 ### Scenario 4 — Check the current state with `doctor`
 
 ```bash
-ollama-ctxguard doctor --upstream http://127.0.0.1:11700 --config example/ctxguard.yaml
+ollama-ctxguard --lang en doctor --upstream http://127.0.0.1:11700 --config example/ctxguard.yaml
 ```
 
 ![doctor table: config 32768, a warning that it is currently loaded at 4096](docs/images/02-doctor.png)
@@ -199,7 +216,7 @@ error: cannot reach Ollama at http://127.0.0.1:1 (is it running? set --upstream)
 `serve` writes one line per request to stderr (to a file with `--log-file`, in a human-friendly format with `--log-format text`). It does not record the prompt, the response body or `Authorization`, and leaves only fixed fields. Below is the real log obtained from the scenarios above.
 
 ```text
-ollama-ctxguard 0.1.0 listening on http://127.0.0.1:11735 -> upstream http://127.0.0.1:11700 (2 model rules, strict=false)
+ollama-ctxguard 0.2.0 listening on http://127.0.0.1:11735 -> upstream http://127.0.0.1:11700 (2 model rules, strict=false)
 {"ts":"2026-11-10T20:09:33.777875Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":false,"status":200,"num_ctx":32768,"num_ctx_source":"config","prompt_tokens":6,"est_prompt_tokens":1,"verdict":"ok","ms":1}
 {"ts":"2026-11-10T20:09:33.796980Z","method":"POST","path":"/v1/chat/completions","model":"qwen3:4b","stream":true,"status":200,"num_ctx":32768,"num_ctx_source":"config","prompt_tokens":6,"est_prompt_tokens":1,"verdict":"ok","ms":1}
 {"ts":"2026-11-10T20:09:33.840871Z","method":"POST","path":"/v1/chat/completions","status":403,"ms":0,"event":"host_not_allowed"}
@@ -208,7 +225,7 @@ shutting down
 ```
 
 ```text
-ollama-ctxguard 0.1.0 listening on http://127.0.0.1:11736 -> upstream http://127.0.0.1:11700 (1 model rules, strict=true)
+ollama-ctxguard 0.2.0 listening on http://127.0.0.1:11736 -> upstream http://127.0.0.1:11700 (1 model rules, strict=true)
 2026-11-10T20:10:25.256384Z WARN method=POST path=/v1/chat/completions model=qwen3:4b stream=false status=422 num_ctx=4096 num_ctx_source=config prompt_tokens=2050 est_prompt_tokens=6000 verdict=truncated reason=context_shift_signature ms=4 event=ctx_warning
 shutting down
 ```
@@ -292,6 +309,7 @@ flowchart LR
 | `cannot listen on 127.0.0.1:11434 … try --port` (mock) | A real Ollama is already using 11434 | Use another port, as in `mock-upstream --port 11700` |
 | `error: cannot reach Ollama at …` (exit code 2) | Ollama is off or the `--upstream` address is wrong | Check that Ollama is running, specify `--upstream` |
 | `error: cannot listen on 127.0.0.1:11435: port already in use …` | Another ctxguard is still running or the port is in use | `--listen 127.0.0.1:<another port>` |
+| `error: Could not find a command named "frob".` followed by the usage (exit code 64) | The command name is misspelled | Pick one of `serve`, `doctor`, `demo`, `mock-upstream` from the usage. With `--lang ko` the line is `오류: 알 수 없는 하위 명령입니다: "frob"` |
 | 403 `host_not_allowed` | The request's Host is not localhost, this PC's name or a private IP | Change the address to `127.0.0.1` or `localhost` |
 | 403 `upstream returned HTTP 403 … Origin` | Ollama rejected the browser Origin | Allow it on the Ollama server with `OLLAMA_ORIGINS` |
 | `dart compile exe` gives an output folder error | The `build` folder doesn't exist | Run `mkdir -p build` and compile again |
@@ -309,7 +327,7 @@ dart analyze --fatal-infos
 dart test
 ```
 
-All 120 tests of `dart test` pass (about 2 seconds, run only inside 127.0.0.1 with a fake Ollama, no real Ollama or external network needed). The optional tool for checking the behavior against a real Ollama is `dart run tool/real_ollama_check.dart`.
+All 145 tests of `dart test` pass (about 2 seconds, run only inside 127.0.0.1 with a fake Ollama, no real Ollama or external network needed). The optional tool for checking the behavior against a real Ollama is `dart run tool/real_ollama_check.dart`.
 
 Please leave bugs and suggestions as issues. For the change log, see [CHANGELOG.md](CHANGELOG.md).
 

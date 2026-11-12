@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- Screen language: help, `serve` start/warning/shutdown lines, the `doctor` table and warnings, the `demo` explanation, `mock-upstream` notes and error messages are available in English and Korean.
+  - Choose with `--lang en|ko` (before or after the command), then `OLLAMA_CTXGUARD_LANG`, then `LC_ALL` / `LC_MESSAGES` / `LANG`. Anything that is not Korean is English. An invalid `--lang` value exits with 64.
+  - `package:args` parse errors (unknown option, missing value, value not allowed) are translated too.
+  - A config file that is not valid UTF-8 (or cannot be read) now gives a localized config error with exit code 2 instead of an unhandled exception (exit 255).
+  - `ConfigException` gained `code` and `params`; its `message` and `toString()` stay English. `runDoctor` and `runDemo` gained an optional `lang` argument (default English).
+
+- An unknown command (for example `ollama-ctxguard frob`) now prints a localized `error:` line before the usage, like unknown options do. Exit code stays 64.
+
+### Fixed
+
+- README scenario 3: the `strict.yaml` example now puts the model rule under `models:`, so `serve` accepts it. `example/ctxguard.yaml` comments are English with Korean alongside.
+
+### Unchanged on purpose
+
+- Exit codes, `--version`, `doctor --json` (warnings included), the access log, HTTP response bodies and headers, and the demo prompt and raw log lines stay English. Pin the human-readable text with `--lang en` or `OLLAMA_CTXGUARD_LANG=en` if a script compares it.
+- Text inside a localized sentence stays as is: OS error originals, YAML parser details, the original text of unrecognized argument errors (after `인자 오류:`), the demo's data labels (`num_ctx=` …) and the model's answer sentence.
+
 ## 0.1.0
 
 - `serve`: local proxy in front of Ollama.
