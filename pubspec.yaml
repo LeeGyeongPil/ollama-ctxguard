@@ -3,7 +3,7 @@ description: >-
   Local proxy in front of Ollama that applies a per-model num_ctx to
   OpenAI-compatible /v1/chat/completions requests and flags responses whose
   prompt was silently truncated by the context window.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/LeeGyeongPil/ollama-ctxguard
 issue_tracker: https://github.com/LeeGyeongPil/ollama-ctxguard/issues
 topics:
