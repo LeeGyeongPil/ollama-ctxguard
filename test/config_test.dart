@@ -132,11 +132,14 @@ log_file: /tmp/ctxguard.log
 
     test('bad arguments exit 64, bad config exits 2', () async {
       final err = StringBuffer();
-      expect(await runCli(['serve', '--nope'], out: StringBuffer(), err: err), 64);
-      expect(await runCli([], out: StringBuffer(), err: err), 64);
-      expect(await runCli(['serve', '--config', '/nonexistent.yaml'], out: StringBuffer(), err: err), 2);
+      expect(await runCli(['serve', '--nope'], out: StringBuffer(), err: err, environment: const {}), 64);
+      expect(await runCli([], out: StringBuffer(), err: err, environment: const {}), 64);
+      expect(
+        await runCli(['serve', '--config', '/nonexistent.yaml'], out: StringBuffer(), err: err, environment: const {}),
+        2,
+      );
       final out = StringBuffer();
-      expect(await runCli(['--version'], out: out, err: err), 0);
+      expect(await runCli(['--version'], out: out, err: err, environment: const {}), 0);
       expect(out.toString().trim(), packageVersion);
     });
 
@@ -148,6 +151,7 @@ log_file: /tmp/ctxguard.log
         ['serve', '--listen', '127.0.0.1:${busy.port}'],
         out: StringBuffer(),
         err: err,
+        environment: const {},
       ).timeout(const Duration(seconds: 5));
       expect(code, 2);
       expect(err.toString(), contains('already in use'));
@@ -159,6 +163,23 @@ log_file: /tmp/ctxguard.log
         expect(isAddressInUse(SocketException('bind', osError: OSError('Address already in use', code))), isTrue);
       }
       expect(isAddressInUse(SocketException('bind', osError: const OSError('Permission denied', 13))), isFalse);
+    });
+  });
+
+  group('documented YAML', () {
+    test('the strict.yaml printf line in both READMEs loads as a config', () {
+      for (final readme in ['README.md', 'README.ko.md']) {
+        final m = RegExp(r"printf '(.*)' > strict\.yaml").firstMatch(File(readme).readAsStringSync());
+        expect(m, isNotNull, reason: readme);
+        final dir = Directory.systemTemp.createTempSync('ctxguard_readme_');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final f = File('${dir.path}/strict.yaml')..writeAsStringSync(m!.group(1)!.replaceAll(r'\n', '\n'));
+        expect(CtxguardConfig.load(f.path).numCtxFor('qwen3:8b'), 4096, reason: readme);
+      }
+    });
+
+    test('example/ctxguard.yaml loads', () {
+      expect(CtxguardConfig.load('example/ctxguard.yaml').numCtxFor('qwen3:8b'), 32768);
     });
   });
 }

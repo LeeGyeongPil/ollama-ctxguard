@@ -4,12 +4,28 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+import 'i18n.dart';
 import 'truncation.dart';
 
 /// 설정이 잘못됐을 때(종료 코드 2).
 class ConfigException implements Exception {
-  ConfigException(this.message);
+  /// [message] stays English for library users; the CLI shows [code] + [params] in the screen language.
+  ConfigException(this.message, {this.code = 'config.message', this.params = const {}});
+
+  /// Builds the English message from the message table, keeping [code] and [params] for the CLI.
+  factory ConfigException.coded(String code, [Map<String, Object?> params = const {}]) =>
+      ConfigException(t(Lang.en, code, params), code: code, params: params);
+
   final String message;
+
+  /// Message-table key and its parameters (used to localize at the CLI boundary).
+  final String code;
+  final Map<String, Object?> params;
+
+  /// Text for the CLI in [lang] (without the "error:" prefix).
+  String localized(Lang lang) =>
+      '${t(lang, 'prefix.config')} ${code == 'config.message' ? message : t(lang, code, params)}';
+
   @override
   String toString() => 'config error: $message';
 }
@@ -72,9 +88,16 @@ class CtxguardConfig {
   static CtxguardConfig load(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      throw ConfigException('file not found: $path');
+      throw ConfigException.coded('config.file_not_found', {'path': path});
     }
-    return fromYamlString(file.readAsStringSync(), source: path);
+    final String text;
+    try {
+      text = file.readAsStringSync();
+    } on FileSystemException catch (e) {
+      // Non-UTF-8 bytes, a directory, or a permission problem: report as a config error, not a crash.
+      throw ConfigException.coded('config.unreadable', {'path': path, 'detail': e.message});
+    }
+    return fromYamlString(text, source: path);
   }
 
   /// YAML 문자열을 검증하며 읽는다. 모르는 키는 오타일 가능성이 커서 오류로 본다.
@@ -83,14 +106,14 @@ class CtxguardConfig {
     try {
       doc = loadYaml(text);
     } on YamlException catch (e) {
-      throw ConfigException('$source: invalid YAML: ${e.message}');
+      throw ConfigException.coded('config.invalid_yaml', {'source': source, 'detail': e.message});
     }
     if (doc == null) return CtxguardConfig();
-    if (doc is! YamlMap) throw ConfigException('$source: top level must be a mapping');
+    if (doc is! YamlMap) throw ConfigException.coded('config.top_mapping', {'source': source});
 
     for (final k in doc.keys) {
       if (!_topKeys.contains(k)) {
-        throw ConfigException('$source: unknown key "$k" (allowed: ${_topKeys.join(', ')})');
+        throw ConfigException.coded('config.unknown_key', {'source': source, 'key': k, 'allowed': _topKeys.join(', ')});
       }
     }
 
@@ -106,7 +129,7 @@ class CtxguardConfig {
     final models = <String, int>{};
     final rawModels = doc['models'];
     if (rawModels != null) {
-      if (rawModels is! YamlMap) throw ConfigException('$source: "models" must be a mapping');
+      if (rawModels is! YamlMap) throw ConfigException.coded('config.models_mapping', {'source': source});
       rawModels.forEach((k, v) {
         models[k.toString()] = _numCtx(v, 'models["$k"]', source);
       });
@@ -115,15 +138,15 @@ class CtxguardConfig {
     final defaultNumCtx = doc['default'] == null ? null : _numCtx(doc['default'], 'default', source);
 
     final strict = doc['strict'] ?? false;
-    if (strict is! bool) throw ConfigException('$source: "strict" must be true or false');
+    if (strict is! bool) throw ConfigException.coded('config.strict_bool', {'source': source});
 
     var trunc = const TruncationSettings();
     final rawTrunc = doc['truncation'];
     if (rawTrunc != null) {
-      if (rawTrunc is! YamlMap) throw ConfigException('$source: "truncation" must be a mapping');
+      if (rawTrunc is! YamlMap) throw ConfigException.coded('config.truncation_mapping', {'source': source});
       for (final k in rawTrunc.keys) {
         if (!_truncKeys.contains(k)) {
-          throw ConfigException('$source: unknown key "truncation.$k"');
+          throw ConfigException.coded('config.unknown_truncation_key', {'source': source, 'key': k});
         }
       }
       trunc = TruncationSettings(
@@ -231,7 +254,7 @@ bool globMatch(String pattern, String text) {
 Uri parseUpstream(String raw) {
   final uri = Uri.tryParse(raw.trim());
   if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) {
-    throw ConfigException('upstream must look like http://127.0.0.1:11434 (got "$raw")');
+    throw ConfigException.coded('config.upstream_form', {'raw': raw});
   }
   return uri;
 }
@@ -252,7 +275,7 @@ Uri upstreamUrl(Uri base, String path, {String query = ''}) {
   if (s.startsWith('[')) {
     final end = s.indexOf(']');
     if (end < 0 || end + 1 >= s.length || s[end + 1] != ':') {
-      throw ConfigException('listen must look like 127.0.0.1:11435 (got "$raw")');
+      throw ConfigException.coded('config.listen_form', {'raw': raw});
     }
     host = s.substring(1, end);
     portText = s.substring(end + 2);
@@ -266,7 +289,7 @@ Uri upstreamUrl(Uri base, String path, {String query = ''}) {
   }
   final port = int.tryParse(portText);
   if (host.isEmpty || port == null || port < 0 || port > 65535) {
-    throw ConfigException('listen must look like 127.0.0.1:11435 (got "$raw")');
+    throw ConfigException.coded('config.listen_form', {'raw': raw});
   }
   return (host, port);
 }
@@ -274,12 +297,12 @@ Uri upstreamUrl(Uri base, String path, {String query = ''}) {
 LogFormat parseLogFormat(String raw) => switch (raw) {
   'json' => LogFormat.json,
   'text' => LogFormat.text,
-  _ => throw ConfigException('log_format must be json or text (got "$raw")'),
+  _ => throw ConfigException.coded('config.log_format', {'raw': raw}),
 };
 
 String _str(YamlMap m, String key, String source) {
   final v = m[key];
-  if (v is! String) throw ConfigException('$source: "$key" must be a string');
+  if (v is! String) throw ConfigException.coded('config.must_string', {'source': source, 'key': key});
   return v;
 }
 
@@ -287,14 +310,20 @@ int _numCtx(Object? v, String what, String source) => _int(v, what, source, min:
 
 int _int(Object? v, String what, String source, {int min = 0, int max = 1 << 31}) {
   if (v is! int || v < min || v > max) {
-    throw ConfigException('$source: "$what" must be an integer in [$min, $max] (got "$v")');
+    throw ConfigException.coded('config.int_range', {
+      'source': source,
+      'what': what,
+      'min': min,
+      'max': max,
+      'value': v,
+    });
   }
   return v;
 }
 
 double _double(Object? v, String what, String source) {
   if (v is! num || v <= 0) {
-    throw ConfigException('$source: "$what" must be a positive number (got "$v")');
+    throw ConfigException.coded('config.positive', {'source': source, 'what': what, 'value': v});
   }
   return v.toDouble();
 }
