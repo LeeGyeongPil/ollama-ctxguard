@@ -13,6 +13,7 @@ import 'dart:io';
 
 import 'config.dart';
 import 'ctx_resolver.dart';
+import 'i18n.dart';
 
 /// 모델 한 개의 진단.
 class ModelDiagnosis {
@@ -27,6 +28,15 @@ class ModelDiagnosis {
   /// /v1 직접 값의 근거: modelfile(확실) · current_load_guess(지금 로드 크기로 추정) · server_default_unknown.
   String v1DirectBasis = 'server_default_unknown';
   final List<String> warnings = [];
+
+  /// Same warnings as [warnings] but as message keys, so the table can show them in the screen language.
+  final List<Msg> warningMsgs = [];
+
+  /// Records a warning: English text for [warnings] (JSON stays English), key for the table.
+  void addWarning(Msg msg) {
+    warnings.add(msg.text(Lang.en));
+    warningMsgs.add(msg);
+  }
 
   Map<String, Object?> toJson() => {
     'model': model,
@@ -46,6 +56,7 @@ Future<int> runDoctor({
   String? model,
   bool json = false,
   required StringSink out,
+  Lang lang = Lang.en,
   Duration timeout = const Duration(seconds: 15),
 }) async {
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
@@ -56,11 +67,12 @@ Future<int> runDoctor({
     // upstreamUrl: 역프록시 뒤 Ollama(http://host/ollama)의 경로 접두를 지킨다.
     final version = await _getJson(client, upstreamUrl(base, '/api/version'), timeout);
     if (version == null) {
-      final msg = 'cannot reach Ollama at $base (is it running? set --upstream)';
+      final msg = Msg('doctor.unreachable', {'upstream': base});
       if (json) {
-        out.writeln(jsonEncode({'upstream': '$base', 'error': msg}));
+        // 기계용 출력은 언제나 영어.
+        out.writeln(jsonEncode({'upstream': '$base', 'error': msg.text(Lang.en)}));
       } else {
-        out.writeln('error: $msg');
+        out.writeln('${t(lang, 'prefix.error')} ${msg.text(lang)}');
       }
       return 2;
     }
@@ -91,7 +103,7 @@ Future<int> runDoctor({
 
       final show = await _postJson(client, upstreamUrl(base, '/api/show'), {'model': name}, timeout);
       if (show == null) {
-        d.warnings.add('model not found on this Ollama (ollama pull $name)');
+        d.addWarning(Msg('warn.not_found', {'model': name}));
         exit = 2;
         diags.add(d);
         continue;
@@ -122,7 +134,7 @@ Future<int> runDoctor({
         }),
       );
     } else {
-      _printTable(out, base, version['version'], diags);
+      _printTable(out, base, version['version'], diags, lang);
     }
     return exit;
   } finally {
@@ -133,20 +145,17 @@ Future<int> runDoctor({
 void _warn(ModelDiagnosis d) {
   final cfg = d.configNumCtx;
   if (cfg != null && d.modelMax != null && cfg > d.modelMax!) {
-    d.warnings.add('config $cfg exceeds model max ${d.modelMax} — Ollama caps it at ${d.modelMax}');
+    d.addWarning(Msg('warn.exceeds', {'config': cfg, 'max': d.modelMax}));
   }
   if (cfg == null) {
     final v1 = switch (d.v1DirectBasis) {
-      'modelfile' => '${d.v1DirectNumCtx} (Modelfile)',
-      'current_load_guess' => 'the server default (probably ${d.v1DirectNumCtx}, the current load)',
-      _ => 'the server default',
+      'modelfile' => Msg('warn.v1_modelfile', {'value': d.v1DirectNumCtx}),
+      'current_load_guess' => Msg('warn.v1_guess', {'value': d.v1DirectNumCtx}),
+      _ => const Msg('warn.v1_default'),
     };
-    d.warnings.add(
-      'no ctxguard setting — /v1 clients get $v1'
-      '; add a line under "models:" (for example "${_globFor(d.model)}": ${_suggest(d)})',
-    );
+    d.addWarning(Msg('warn.no_setting', {'v1': v1, 'glob': _globFor(d.model), 'suggest': _suggest(d)}));
   } else if (d.loadedNumCtx != null && d.loadedNumCtx != cfg) {
-    d.warnings.add('loaded at ${d.loadedNumCtx} but config says $cfg — the next request through ctxguard reloads it');
+    d.addWarning(Msg('warn.reload', {'loaded': d.loadedNumCtx, 'config': cfg}));
   }
 }
 
@@ -171,42 +180,46 @@ int? _modelfileNumCtx(Map<String, Object?> show) {
   return null;
 }
 
-void _printTable(StringSink out, Uri base, Object? version, List<ModelDiagnosis> diags) {
-  out.writeln('Ollama $version at $base');
+void _printTable(StringSink out, Uri base, Object? version, List<ModelDiagnosis> diags, Lang lang) {
+  out.writeln(t(lang, 'doctor.header', {'version': version, 'upstream': base}));
   if (diags.isEmpty) {
-    out.writeln('no models installed');
+    out.writeln(t(lang, 'doctor.no_models'));
     return;
   }
   String cell(int? v) => v?.toString() ?? '-';
   final rows = <List<String>>[
-    ['MODEL', 'CONFIG', 'MODEL MAX', 'MODELFILE', 'LOADED', '/v1 DIRECT'],
+    [
+      for (final k in const ['model', 'config', 'model_max', 'modelfile', 'loaded', 'v1']) t(lang, 'doctor.col_$k'),
+    ],
     for (final d in diags)
       [
         d.model,
         cell(d.configNumCtx),
         cell(d.modelMax),
         cell(d.modelfileNumCtx),
-        d.loadedNumCtx?.toString() ?? 'not loaded',
+        d.loadedNumCtx?.toString() ?? t(lang, 'doctor.not_loaded'),
         switch (d.v1DirectBasis) {
           'modelfile' => '${d.v1DirectNumCtx}',
           'current_load_guess' => '${d.v1DirectNumCtx}*',
-          _ => 'server default',
+          _ => t(lang, 'doctor.server_default'),
         },
       ],
   ];
   final widths = [
-    for (var c = 0; c < rows.first.length; c++) rows.map((r) => r[c].length).reduce((a, b) => a > b ? a : b),
+    for (var c = 0; c < rows.first.length; c++) rows.map((r) => displayWidth(r[c])).reduce((a, b) => a > b ? a : b),
   ];
   for (final r in rows) {
-    out.writeln([for (var c = 0; c < r.length; c++) r[c].padRight(widths[c])].join('  ').trimRight());
+    out.writeln(
+      [for (var c = 0; c < r.length; c++) r[c] + ' ' * (widths[c] - displayWidth(r[c]))].join('  ').trimRight(),
+    );
   }
   if (diags.any((d) => d.v1DirectBasis == 'current_load_guess')) {
-    out.writeln('* guessed from the current load: a /v1 client gets the server default');
-    out.writeln('  (OLLAMA_CONTEXT_LENGTH or a VRAM-based default) unless the Modelfile sets num_ctx');
+    out.writeln(t(lang, 'doctor.note_guess_1'));
+    out.writeln(t(lang, 'doctor.note_guess_2'));
   }
   for (final d in diags) {
-    for (final w in d.warnings) {
-      out.writeln('warning: ${d.model}: $w');
+    for (final w in d.warningMsgs) {
+      out.writeln('${t(lang, 'prefix.warning')} ${d.model}: ${w.text(lang)}');
     }
   }
 }

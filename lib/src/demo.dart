@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'access_log.dart';
 import 'config.dart';
+import 'i18n.dart';
 import 'ctx_resolver.dart';
 import 'mock/fake_ollama.dart';
 import 'proxy_server.dart';
@@ -67,8 +68,8 @@ Future<DirectResult> callDirectV1(
 }
 
 /// 데모 실행. 반환값은 종료 코드.
-Future<int> runDemo({required StringSink out}) async {
-  out.writeln('ollama-ctxguard demo — practice mock: a fake Ollama runs in this process, no real model is used');
+Future<int> runDemo({required StringSink out, Lang lang = Lang.en}) async {
+  out.writeln(t(lang, 'demo.title'));
   final fake = FakeOllama(defaultCtx: 4096, modelMax: 40960);
   await fake.start();
   final logLines = <String>[];
@@ -85,17 +86,18 @@ Future<int> runDemo({required StringSink out}) async {
   try {
     const model = 'qwen3:4b';
     final prompt = secretPrompt();
-    out.writeln(
-      'prompt: ${utf8.encode(prompt).length} bytes, "SECRET-CODE is 7731" at the very start; '
-      'config: "qwen3:*": 16384',
-    );
+    out.writeln(t(lang, 'demo.prompt', {'bytes': utf8.encode(prompt).length}));
     out.writeln('');
 
     // ① 직접 /v1
     final d = await callDirectV1(client, fake.uri, model, prompt);
     out.writeln(
-      'direct /v1    : num_ctx=${d.numCtx} prompt_tokens=${d.promptTokens} '
-      'verdict=${d.verdict.verdict.wireName}  answer: ${d.answer}',
+      t(lang, 'demo.direct', {
+        'numCtx': d.numCtx,
+        'tokens': d.promptTokens,
+        'verdict': d.verdict.verdict.wireName,
+        'answer': d.answer,
+      }),
     );
 
     // ② 프록시 경유 — 클라이언트는 base_url 만 바꿨다.
@@ -114,16 +116,19 @@ Future<int> runDemo({required StringSink out}) async {
     final j = jsonDecode(await utf8.decoder.bind(res).join()) as Map<String, Object?>;
     final answer = ((j['choices'] as List).first as Map)['message']['content'];
     out.writeln(
-      'via ctxguard  : num_ctx=${res.headers.value('x-ctxguard-num-ctx')} '
-      'prompt_tokens=${res.headers.value('x-ctxguard-prompt-tokens')} '
-      'verdict=${res.headers.value('x-ctxguard-verdict')}  answer: $answer',
+      t(lang, 'demo.via', {
+        'numCtx': res.headers.value('x-ctxguard-num-ctx'),
+        'tokens': res.headers.value('x-ctxguard-prompt-tokens'),
+        'verdict': res.headers.value('x-ctxguard-verdict'),
+        'answer': answer,
+      }),
     );
     out.writeln('');
-    out.writeln('what happened: /v1 ignored num_ctx, loaded the model at 4096 and silently kept only');
-    out.writeln('${d.promptTokens} prompt tokens (about half of 4096), so the code at the start was lost.');
-    out.writeln('ctxguard sent the same request to /api/chat with options.num_ctx=16384.');
+    out.writeln(t(lang, 'demo.what_1'));
+    out.writeln(t(lang, 'demo.what_2', {'tokens': d.promptTokens}));
+    out.writeln(t(lang, 'demo.what_3'));
     out.writeln('');
-    out.writeln('proxy log line (no prompt text is logged):');
+    out.writeln(t(lang, 'demo.log_title'));
     for (final l in logLines) {
       out.writeln('  $l');
     }
