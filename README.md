@@ -2,7 +2,7 @@
 
 **English** | [한국어](README.ko.md)
 
-A small local proxy that sits in front of Ollama. Ollama's OpenAI-compatible `/v1/chat/completions` ignores the per-model context size (`num_ctx`) and, when the prompt is longer than the window, silently discards its beginning. ollama-ctxguard makes the `num_ctx` you configure actually apply, and flags every response whose prompt was cut by the context window. Built for people who point OpenAI SDK based agents, coding CLIs or RAG apps at a local Ollama; leave the app code as it is and change only `base_url`. Install: `dart pub get && mkdir -p build && dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard`, then change your client's `base_url` to `http://127.0.0.1:11435/v1`.
+A small local proxy that sits in front of Ollama. Ollama's OpenAI-compatible `/v1/chat/completions` ignores the per-model context size (`num_ctx`) and, when the prompt is longer than the window, silently discards its beginning. ollama-ctxguard makes the `num_ctx` you configure actually apply, and flags every response whose prompt was cut by the context window. Built for people who point OpenAI SDK based agents, coding CLIs or RAG apps at a local Ollama; leave the app code as it is and change only `base_url`. Install: download a prebuilt executable from [Releases](https://github.com/LeeGyeongPil/ollama-ctxguard/releases) or build from source (`dart pub get && mkdir -p build && dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard`), then change your client's `base_url` to `http://127.0.0.1:11435/v1`.
 
 ![Demo run screen: calling /v1 directly loses the secret code, while going through ctxguard gets the answer](docs/images/01-hero.png)
 *The `demo` output in practice mock mode. When the same request is sent directly to /v1, the model loads at 4096 and the beginning is cut; through ctxguard it loads at 16384 and the answer is right.*
@@ -15,6 +15,28 @@ A small local proxy that sits in front of Ollama. Ollama's OpenAI-compatible `/v
 
 ## Installation
 
+### Download a prebuilt binary
+
+Each tagged release on the [Releases page](https://github.com/LeeGyeongPil/ollama-ctxguard/releases) has single-file executables built by GitHub Actions (no Dart SDK needed):
+
+| OS | File |
+|---|---|
+| Linux x64 | `ollama-ctxguard-<tag>-linux-x64` |
+| macOS Apple silicon | `ollama-ctxguard-<tag>-macos-arm64` |
+
+Windows is not provided yet (build from source below).
+
+```bash
+chmod +x ollama-ctxguard-<tag>-linux-x64        # use the file you downloaded
+./ollama-ctxguard-<tag>-linux-x64 --lang en demo
+```
+
+The macOS binary is not signed, so Gatekeeper may refuse to open it. Remove the quarantine flag once: `xattr -d com.apple.quarantine ollama-ctxguard-<tag>-macos-arm64`.
+
+To verify a download, put `SHA256SUMS` from the same release next to it and run `sha256sum -c --ignore-missing SHA256SUMS` (on macOS: `shasum -a 256 -c --ignore-missing SHA256SUMS`). The `ollama-ctxguard` in the examples below is the file you downloaded, or `./build/ollama-ctxguard` if you build it yourself.
+
+### Build from source
+
 Prerequisites: Dart SDK 3.8 or later ([installation guide](https://dart.dev/get-dart)), Git, and Ollama (needed only in real mode; not needed in practice mock mode). On a minimal Linux environment only basic tools like `git`, `curl` and `unzip` are needed (the build on Linux is verified by this repo's GitHub Actions).
 
 ```bash
@@ -25,7 +47,7 @@ mkdir -p build
 dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard
 ```
 
-`build/ollama-ctxguard` is the single executable (about 6.6MB). The `build` folder must be created before compiling. You can also do the same without installing, with `dart run bin/ollama_ctxguard.dart <command>`. The `ollama-ctxguard` in the examples below is `./build/ollama-ctxguard`.
+`build/ollama-ctxguard` is the single executable (about 7MB). The `build` folder must be created before compiling. You can also do the same without installing, with `dart run bin/ollama_ctxguard.dart <command>`. The `ollama-ctxguard` in the examples below is `./build/ollama-ctxguard`.
 
 > Installing with `dart pub global activate` and publishing to pub.dev are not prepared yet.
 
@@ -294,7 +316,7 @@ flowchart LR
 - Streaming and pass-through responses close the connection when finished (no keep-alive reuse).
 - `/v1/completions` and `/v1/embeddings` are only passed through and `num_ctx` is not applied (`num_ctx_not_applied` in the log).
 - There is no authentication or TLS. By default it is loopback only.
-- Local verification was done on macOS arm64 with Dart 3.8.1, and Linux is verified by CI.
+- Local verification was done on macOS arm64 with Dart 3.8.1, and Linux is verified by CI. The release workflow builds Linux x64 and macOS arm64 executables; Windows has not been verified.
 
 ## When to use it
 

@@ -15,6 +15,28 @@ Ollama 의 OpenAI 호환 주소(`/v1`)는 `num_ctx`(컨텍스트 창 크기)를 
 
 ## 설치
 
+### 미리 빌드한 실행 파일 내려받기
+
+태그가 붙은 릴리스마다 [Releases 페이지](https://github.com/LeeGyeongPil/ollama-ctxguard/releases)에 GitHub Actions 가 빌드한 단일 실행 파일이 올라갑니다(Dart SDK 불필요).
+
+| OS | 파일 |
+|---|---|
+| Linux x64 | `ollama-ctxguard-<태그>-linux-x64` |
+| macOS Apple silicon | `ollama-ctxguard-<태그>-macos-arm64` |
+
+Windows 는 아직 제공하지 않습니다(아래 소스 빌드를 쓰세요).
+
+```bash
+chmod +x ollama-ctxguard-<태그>-linux-x64        # 내려받은 파일 이름으로
+./ollama-ctxguard-<태그>-linux-x64 --lang ko demo
+```
+
+macOS 용은 서명되지 않아 Gatekeeper 가 열기를 막을 수 있습니다. 한 번만 격리 표시를 지우세요: `xattr -d com.apple.quarantine ollama-ctxguard-<태그>-macos-arm64`.
+
+내려받은 파일 확인: 같은 릴리스의 `SHA256SUMS` 를 옆에 두고 `sha256sum -c --ignore-missing SHA256SUMS` 를 실행합니다(macOS 는 `shasum -a 256 -c --ignore-missing SHA256SUMS`). 아래 예의 `ollama-ctxguard` 는 내려받은 파일, 직접 빌드했다면 `./build/ollama-ctxguard` 입니다.
+
+### 소스 빌드
+
 전제: Dart SDK 3.8 이상([설치 안내](https://dart.dev/get-dart)), Git, 그리고 Ollama(실제 모드에서만 필요. 연습용 목 모드는 필요 없음). 리눅스 최소 환경에서는 `git`·`curl`·`unzip` 같은 기본 도구만 있으면 됩니다(Linux 에서의 빌드는 이 레포의 GitHub Actions 로 확인합니다).
 
 ```bash
@@ -25,7 +47,7 @@ mkdir -p build
 dart compile exe bin/ollama_ctxguard.dart -o build/ollama-ctxguard
 ```
 
-`build/ollama-ctxguard` 가 단일 실행 파일입니다(약 6.6MB). `build` 폴더는 컴파일 전에 만들어 두어야 합니다. 설치 없이 `dart run bin/ollama_ctxguard.dart <명령>` 으로도 같은 일을 할 수 있습니다. 아래 예의 `ollama-ctxguard` 는 `./build/ollama-ctxguard` 입니다.
+`build/ollama-ctxguard` 가 단일 실행 파일입니다(약 7MB). `build` 폴더는 컴파일 전에 만들어 두어야 합니다. 설치 없이 `dart run bin/ollama_ctxguard.dart <명령>` 으로도 같은 일을 할 수 있습니다. 아래 예의 `ollama-ctxguard` 는 `./build/ollama-ctxguard` 입니다.
 
 > `dart pub global activate` 로 설치하는 방법과 pub.dev 게시는 아직 준비하지 않았습니다.
 
@@ -294,7 +316,7 @@ flowchart LR
 - 스트리밍·통과 응답은 끝나면 연결을 닫습니다(keep-alive 재사용 없음).
 - `/v1/completions`·`/v1/embeddings` 는 통과만 시키고 `num_ctx` 를 적용하지 않습니다(로그에 `num_ctx_not_applied`).
 - 인증·TLS 가 없습니다. 기본은 loopback 전용입니다.
-- 로컬 확인은 macOS arm64, Dart 3.8.1 에서 했고 Linux 는 CI 로 확인합니다.
+- 로컬 확인은 macOS arm64, Dart 3.8.1 에서 했고 Linux 는 CI 로 확인합니다. 릴리스 워크플로는 Linux x64·macOS arm64 실행 파일을 빌드하며 Windows 는 확인하지 않았습니다.
 
 ## 언제 쓰나
 
