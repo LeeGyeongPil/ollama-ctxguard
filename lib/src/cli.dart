@@ -14,7 +14,7 @@ import 'i18n.dart';
 import 'mock/fake_ollama.dart';
 import 'proxy_server.dart';
 
-const packageVersion = '0.2.0';
+const packageVersion = '0.2.1';
 
 /// 하위 명령 정의. 테스트에서도 같은 파서를 쓴다. 도움말 문구는 [lang] 으로 고른다.
 ArgParser buildParser({Lang lang = Lang.en}) {
