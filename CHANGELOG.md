@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Added
+
+- Release workflow (`.github/workflows/release.yml`): pushing a `v*` tag builds single-file executables for Linux x64 and macOS arm64 (tests and a `demo` smoke run first) and attaches them with a `SHA256SUMS` file to the GitHub Release. Windows is not included yet.
+- README: "Download a prebuilt binary" section at the start of Installation.
+
 ## 0.2.0
 
 ### Added
